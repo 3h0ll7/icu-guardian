@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Shield, Brain } from 'lucide-react';
 import type { VitalsData, InfusionPump, PatientStatus, SceneContext, MonitoringEvent, SystemHealth } from '@/types/icu';
 import { createMockVitals, createMockPumps, createMockPatientStatus, createMockSceneContext, createMockSystemHealth, createEvent } from '@/utils/mockData';
@@ -10,10 +10,13 @@ import StatusBar from '@/components/icu/StatusBar';
 import CameraFeed from '@/components/icu/CameraFeed';
 import { useCamera } from '@/hooks/useCamera';
 import { useICUAnalysis } from '@/hooks/useICUAnalysis';
+import { useCriticalAlertAudio } from '@/hooks/useCriticalAlertAudio';
 
 const Index = () => {
   const { videoRef, status: cameraStatus, error: cameraError, start: startCamera, stop: stopCamera } = useCamera();
   const aiAnalysis = useICUAnalysis(videoRef, cameraStatus === 'active', 10000);
+  const { playCriticalAlert, ensureAudioReady, audioReady } = useCriticalAlertAudio();
+  const lastAlertSignatureRef = useRef<string>('');
 
   const [vitals, setVitals] = useState<VitalsData>(createMockVitals());
   const [pumps, setPumps] = useState<InfusionPump[]>(createMockPumps());
@@ -36,6 +39,29 @@ const Index = () => {
       setEvents(prev => [...aiAnalysis.events, ...prev].slice(0, 50));
     }
   }, [aiAnalysis.vitals, aiAnalysis.pumps, aiAnalysis.patient, aiAnalysis.scene, aiAnalysis.events]);
+
+  const handleStartCamera = useCallback(() => {
+    // Browser audio often requires a user interaction to unlock playback.
+    void ensureAudioReady();
+    startCamera();
+  }, [ensureAudioReady, startCamera]);
+
+  const criticalEventSignature = useMemo(() => {
+    const criticalEvents = aiAnalysis.events.filter(event => event.priority === 'critical');
+    return criticalEvents
+      .map(event => `${event.category}:${event.message}`)
+      .sort()
+      .join('|');
+  }, [aiAnalysis.events]);
+
+  // Play audio tone once per unique set of critical AI events
+  useEffect(() => {
+    if (!criticalEventSignature) return;
+    if (criticalEventSignature === lastAlertSignatureRef.current) return;
+
+    lastAlertSignatureRef.current = criticalEventSignature;
+    void playCriticalAlert();
+  }, [criticalEventSignature, playCriticalAlert]);
 
   // Update system health based on camera + AI status
   useEffect(() => {
@@ -102,6 +128,9 @@ const Index = () => {
                 <span className="text-[10px] font-mono text-accent uppercase">
                   {aiAnalysis.analyzing ? 'Analyzing…' : 'AI Active'}
                 </span>
+                <span className={`text-[10px] font-mono ${audioReady ? 'text-vital-normal' : 'text-vital-warning'}`}>
+                  {audioReady ? 'Audio Ready' : 'Audio Locked'}
+                </span>
               </div>
             )}
             {aiAnalysis.error && (
@@ -133,7 +162,7 @@ const Index = () => {
               videoRef={videoRef}
               status={cameraStatus}
               error={cameraError}
-              onStart={startCamera}
+              onStart={handleStartCamera}
               onStop={stopCamera}
             />
             <VitalsPanel vitals={vitals} />
