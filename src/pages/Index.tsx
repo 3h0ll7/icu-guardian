@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Shield, Activity } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import type { VitalsData, InfusionPump, PatientStatus, SceneContext, MonitoringEvent, SystemHealth } from '@/types/icu';
 import { createMockVitals, createMockPumps, createMockPatientStatus, createMockSceneContext, createMockSystemHealth, createEvent } from '@/utils/mockData';
 import VitalsPanel from '@/components/icu/VitalsPanel';
@@ -7,8 +7,11 @@ import InfusionPanel from '@/components/icu/InfusionPanel';
 import PatientStatusPanel from '@/components/icu/PatientStatusPanel';
 import AlertFeed from '@/components/icu/AlertFeed';
 import StatusBar from '@/components/icu/StatusBar';
+import CameraFeed from '@/components/icu/CameraFeed';
+import { useCamera } from '@/hooks/useCamera';
 
 const Index = () => {
+  const { videoRef, status: cameraStatus, error: cameraError, start: startCamera, stop: stopCamera } = useCamera();
   const [vitals, setVitals] = useState<VitalsData>(createMockVitals());
   const [pumps, setPumps] = useState<InfusionPump[]>(createMockPumps());
   const [patientStatus, setPatientStatus] = useState<PatientStatus>(createMockPatientStatus());
@@ -25,7 +28,7 @@ const Index = () => {
     const interval = setInterval(() => {
       setVitals(createMockVitals());
       setSceneContext(createMockSceneContext());
-      setSystemHealth(createMockSystemHealth());
+      setSystemHealth(prev => ({ ...prev, ...createMockSystemHealth(), cameraConnected: cameraStatus === 'active' }));
 
       // Occasionally update patient status
       if (Math.random() > 0.7) {
@@ -88,28 +91,13 @@ const Index = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Left: Camera + Vitals */}
           <div className="lg:col-span-5 space-y-4">
-            {/* Camera feed placeholder */}
-            <div className="rounded-lg border border-border bg-card overflow-hidden">
-              <div className="aspect-video bg-secondary/50 relative flex items-center justify-center">
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-card/50" />
-                <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-vital-critical pulse-dot" />
-                  <span className="text-[10px] font-mono text-vital-critical">● REC</span>
-                </div>
-                <div className="absolute top-3 right-3 text-[10px] font-mono text-muted-foreground">
-                  ICU RM-12 • CAM-01
-                </div>
-                <div className="text-center">
-                  <Activity className="h-10 w-10 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground">Camera Feed</p>
-                  <p className="text-[10px] text-muted-foreground/60">Connect camera to enable AI analysis</p>
-                </div>
-                {/* Scan line effect */}
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                  <div className="w-full h-px bg-accent/20 scan-line" />
-                </div>
-              </div>
-            </div>
+            <CameraFeed
+              videoRef={videoRef}
+              status={cameraStatus}
+              error={cameraError}
+              onStart={startCamera}
+              onStop={stopCamera}
+            />
 
             <VitalsPanel vitals={vitals} />
           </div>
