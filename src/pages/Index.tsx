@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Shield, Brain } from 'lucide-react';
-import type { VitalsData, InfusionPump, PatientStatus, SceneContext, MonitoringEvent, SystemHealth } from '@/types/icu';
+import type { VitalsData, InfusionPump, PatientStatus, SceneContext, MonitoringEvent, SystemHealth, VitalTrendPoint } from '@/types/icu';
 import { createMockVitals, createMockPumps, createMockPatientStatus, createMockSceneContext, createMockSystemHealth, createEvent } from '@/utils/mockData';
-import VitalsPanel from '@/components/icu/VitalsPanel';
+import VitalsPanel, { VitalsTrendChart } from '@/components/icu/VitalsPanel';
 import InfusionPanel from '@/components/icu/InfusionPanel';
 import PatientStatusPanel from '@/components/icu/PatientStatusPanel';
 import AlertFeed from '@/components/icu/AlertFeed';
@@ -20,9 +20,22 @@ const Index = () => {
   const [patientStatus, setPatientStatus] = useState<PatientStatus>(createMockPatientStatus());
   const [sceneContext, setSceneContext] = useState<SceneContext>(createMockSceneContext());
   const [systemHealth, setSystemHealth] = useState<SystemHealth>(createMockSystemHealth());
+  const [vitalHistory, setVitalHistory] = useState<VitalTrendPoint[]>([]);
   const [events, setEvents] = useState<MonitoringEvent[]>([
     createEvent('info', 'System', 'ICU Sentinel AI monitoring started'),
   ]);
+
+  useEffect(() => {
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const point: VitalTrendPoint = {
+      timestamp,
+      heartRate: vitals.heartRate.value,
+      spO2: vitals.spO2.value,
+      bloodPressure: vitals.systolicBP.value,
+    };
+
+    setVitalHistory(prev => [...prev.slice(-23), point]);
+  }, [vitals]);
 
   // When AI analysis returns results, use them instead of mock data
   useEffect(() => {
@@ -137,6 +150,7 @@ const Index = () => {
               onStop={stopCamera}
             />
             <VitalsPanel vitals={vitals} />
+            <VitalsTrendChart history={vitalHistory} />
           </div>
 
           {/* Center: Infusion + Patient */}
