@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Shield } from 'lucide-react';
+import { Shield, Brain } from 'lucide-react';
 import type { VitalsData, InfusionPump, PatientStatus, SceneContext, MonitoringEvent, SystemHealth } from '@/types/icu';
 import { createMockVitals, createMockPumps, createMockPatientStatus, createMockSceneContext, createMockSystemHealth, createEvent } from '@/utils/mockData';
 import VitalsPanel from '@/components/icu/VitalsPanel';
@@ -9,9 +9,12 @@ import AlertFeed from '@/components/icu/AlertFeed';
 import StatusBar from '@/components/icu/StatusBar';
 import CameraFeed from '@/components/icu/CameraFeed';
 import { useCamera } from '@/hooks/useCamera';
+import { useICUAnalysis } from '@/hooks/useICUAnalysis';
 
 const Index = () => {
   const { videoRef, status: cameraStatus, error: cameraError, start: startCamera, stop: stopCamera } = useCamera();
+  const aiAnalysis = useICUAnalysis(videoRef, cameraStatus === 'active', 10000);
+
   const [vitals, setVitals] = useState<VitalsData>(createMockVitals());
   const [pumps, setPumps] = useState<InfusionPump[]>(createMockPumps());
   const [patientStatus, setPatientStatus] = useState<PatientStatus>(createMockPatientStatus());
@@ -19,23 +22,43 @@ const Index = () => {
   const [systemHealth, setSystemHealth] = useState<SystemHealth>(createMockSystemHealth());
   const [events, setEvents] = useState<MonitoringEvent[]>([
     createEvent('info', 'System', 'ICU Sentinel AI monitoring started'),
-    createEvent('warning', 'Infusion', 'Pump B: Normal Saline volume low (8 mL remaining)'),
-    createEvent('critical', 'Vitals', 'SpO₂ dropped below 94% — monitor closely'),
   ]);
 
-  // Simulate periodic updates
+  // When AI analysis returns results, use them instead of mock data
   useEffect(() => {
+    if (aiAnalysis.vitals) setVitals(aiAnalysis.vitals);
+    if (aiAnalysis.pumps && aiAnalysis.pumps.length > 0) setPumps(aiAnalysis.pumps);
+    if (aiAnalysis.patient) setPatientStatus(aiAnalysis.patient);
+    if (aiAnalysis.scene) setSceneContext(aiAnalysis.scene);
+
+    // Append AI-generated events
+    if (aiAnalysis.events.length > 0) {
+      setEvents(prev => [...aiAnalysis.events, ...prev].slice(0, 50));
+    }
+  }, [aiAnalysis.vitals, aiAnalysis.pumps, aiAnalysis.patient, aiAnalysis.scene, aiAnalysis.events]);
+
+  // Update system health based on camera + AI status
+  useEffect(() => {
+    setSystemHealth(prev => ({
+      ...prev,
+      cameraConnected: cameraStatus === 'active',
+      lastAnalysisTime: aiAnalysis.lastAnalysisMs > 0 ? new Date() : prev.lastAnalysisTime,
+      analysisDelayMs: aiAnalysis.lastAnalysisMs || prev.analysisDelayMs,
+      frozen: false,
+    }));
+  }, [cameraStatus, aiAnalysis.lastAnalysisMs]);
+
+  // Fallback: simulate updates only when camera is NOT active
+  useEffect(() => {
+    if (cameraStatus === 'active') return;
+
     const interval = setInterval(() => {
       setVitals(createMockVitals());
       setSceneContext(createMockSceneContext());
-      setSystemHealth(prev => ({ ...prev, ...createMockSystemHealth(), cameraConnected: cameraStatus === 'active' }));
+      setSystemHealth(prev => ({ ...prev, ...createMockSystemHealth(), cameraConnected: false }));
 
-      // Occasionally update patient status
-      if (Math.random() > 0.7) {
-        setPatientStatus(createMockPatientStatus());
-      }
+      if (Math.random() > 0.7) setPatientStatus(createMockPatientStatus());
 
-      // Occasionally add events
       if (Math.random() > 0.8) {
         const types: Array<{ p: MonitoringEvent['priority']; c: string; m: string }> = [
           { p: 'info', c: 'System', m: 'Routine analysis completed — all within range' },
@@ -45,18 +68,18 @@ const Index = () => {
           { p: 'warning', c: 'Patient', m: 'Increased patient movement detected' },
         ];
         const t = types[Math.floor(Math.random() * types.length)];
-        setEvents((prev) => [createEvent(t.p, t.c, t.m), ...prev].slice(0, 50));
+        setEvents(prev => [createEvent(t.p, t.c, t.m), ...prev].slice(0, 50));
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [cameraStatus]);
 
   const handleAcknowledge = useCallback((id: string) => {
-    setEvents((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, acknowledged: true } : e))
-    );
+    setEvents(prev => prev.map(e => (e.id === id ? { ...e, acknowledged: true } : e)));
   }, []);
+
+  const isAiActive = cameraStatus === 'active';
 
   return (
     <div className="min-h-screen bg-background">
@@ -72,9 +95,24 @@ const Index = () => {
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Intelligent Monitoring System</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-vital-normal pulse-dot" />
-            <span className="text-xs text-vital-normal font-mono">LIVE</span>
+          <div className="flex items-center gap-3">
+            {isAiActive && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent/10">
+                <Brain className={`h-3.5 w-3.5 text-accent ${aiAnalysis.analyzing ? 'animate-pulse' : ''}`} />
+                <span className="text-[10px] font-mono text-accent uppercase">
+                  {aiAnalysis.analyzing ? 'Analyzing…' : 'AI Active'}
+                </span>
+              </div>
+            )}
+            {aiAnalysis.error && (
+              <span className="text-[10px] text-destructive font-mono">{aiAnalysis.error}</span>
+            )}
+            <div className="flex items-center gap-2">
+              <div className={`h-2 w-2 rounded-full ${isAiActive ? 'bg-vital-normal' : 'bg-vital-warning'} pulse-dot`} />
+              <span className={`text-xs font-mono ${isAiActive ? 'text-vital-normal' : 'text-vital-warning'}`}>
+                {isAiActive ? 'LIVE AI' : 'SIMULATED'}
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -98,7 +136,6 @@ const Index = () => {
               onStart={startCamera}
               onStop={stopCamera}
             />
-
             <VitalsPanel vitals={vitals} />
           </div>
 
