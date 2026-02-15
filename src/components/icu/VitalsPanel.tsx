@@ -1,6 +1,7 @@
 import { Heart, Thermometer, Wind, Activity, Droplets } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import type { ChartConfig } from '@/components/ui/chart';
 import type { VitalsData, VitalSign, VitalTrendPoint } from '@/types/icu';
 
 const statusColorMap = {
@@ -24,11 +25,10 @@ const trendArrow = {
 };
 
 const chartConfig = {
-  heartRate: { label: 'HR', color: 'hsl(var(--chart-1))' },
-  spO2: { label: 'SpO₂', color: 'hsl(var(--chart-2))' },
-  systolicBP: { label: 'BP Sys', color: 'hsl(var(--chart-3))' },
-  diastolicBP: { label: 'BP Dia', color: 'hsl(var(--chart-4))' },
-};
+  heartRate: { label: 'HR (bpm)', color: 'hsl(var(--chart-1))' },
+  spO2: { label: 'SpO₂ (%)', color: 'hsl(var(--chart-2))' },
+  bloodPressure: { label: 'BP (mmHg)', color: 'hsl(var(--chart-3))' },
+} satisfies ChartConfig;
 
 function VitalCard({ vital, icon: Icon, large }: { vital: VitalSign; icon: React.ElementType; large?: boolean }) {
   const color = statusColorMap[vital.status];
@@ -73,13 +73,29 @@ export function VitalsTrendChart({ history }: { history: VitalTrendPoint[] }) {
         <LineChart accessibilityLayer data={history} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
           <CartesianGrid vertical={false} />
           <XAxis dataKey="timestamp" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
-          <YAxis yAxisId="vitals" tickLine={false} axisLine={false} tickMargin={8} domain={[40, 180]} />
-          <YAxis yAxisId="bp" orientation="right" tickLine={false} axisLine={false} tickMargin={8} domain={[40, 180]} />
-          <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-          <Line yAxisId="vitals" dataKey="heartRate" type="monotone" stroke="var(--color-heartRate)" strokeWidth={2} dot={false} connectNulls />
-          <Line yAxisId="vitals" dataKey="spO2" type="monotone" stroke="var(--color-spO2)" strokeWidth={2} dot={false} connectNulls />
-          <Line yAxisId="bp" dataKey="systolicBP" type="monotone" stroke="var(--color-systolicBP)" strokeWidth={2} dot={false} connectNulls />
-          <Line yAxisId="bp" dataKey="diastolicBP" type="monotone" stroke="var(--color-diastolicBP)" strokeWidth={2} dot={false} connectNulls />
+          <YAxis yAxisId="primary" tickLine={false} axisLine={false} tickMargin={8} domain={[40, 180]} />
+          <YAxis yAxisId="spo2" orientation="right" tickLine={false} axisLine={false} tickMargin={8} domain={[80, 100]} />
+          <ChartTooltip
+            content={
+              <ChartTooltipContent
+                indicator="line"
+                formatter={(value, name) => {
+                  const unit = name === 'HR (bpm)' ? 'bpm' : name === 'SpO₂ (%)' ? '%' : 'mmHg';
+                  return (
+                    <>
+                      <span className="text-muted-foreground">{name}</span>
+                      <span className="font-mono font-medium tabular-nums text-foreground">
+                        {value} {unit}
+                      </span>
+                    </>
+                  );
+                }}
+              />
+            }
+          />
+          <Line yAxisId="primary" dataKey="heartRate" type="monotone" stroke="var(--color-heartRate)" strokeWidth={2} dot={false} connectNulls />
+          <Line yAxisId="spo2" dataKey="spO2" type="monotone" stroke="var(--color-spO2)" strokeWidth={2} dot={false} connectNulls />
+          <Line yAxisId="primary" dataKey="bloodPressure" type="monotone" stroke="var(--color-bloodPressure)" strokeWidth={2} dot={false} connectNulls />
           <ChartLegend content={<ChartLegendContent />} />
         </LineChart>
       </ChartContainer>

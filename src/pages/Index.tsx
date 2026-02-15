@@ -31,8 +31,7 @@ const Index = () => {
       timestamp,
       heartRate: vitals.heartRate.value,
       spO2: vitals.spO2.value,
-      systolicBP: vitals.systolicBP.value,
-      diastolicBP: vitals.diastolicBP.value,
+      bloodPressure: vitals.systolicBP.value,
     };
 
     setVitalHistory(prev => [...prev.slice(-23), point]);

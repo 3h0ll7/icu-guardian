@@ -25,8 +25,7 @@ export interface VitalTrendPoint {
   timestamp: string;
   heartRate: number | null;
   spO2: number | null;
-  systolicBP: number | null;
-  diastolicBP: number | null;
+  bloodPressure: number | null;
 }
 
 export interface InfusionPump {
