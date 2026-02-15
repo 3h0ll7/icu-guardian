@@ -21,6 +21,14 @@ export interface VitalsData {
   temperature: VitalSign;
 }
 
+export interface VitalTrendPoint {
+  timestamp: string;
+  heartRate: number | null;
+  spO2: number | null;
+  systolicBP: number | null;
+  diastolicBP: number | null;
+}
+
 export interface InfusionPump {
   id: string;
   label: string;

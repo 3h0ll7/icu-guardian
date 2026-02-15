@@ -1,5 +1,7 @@
 import { Heart, Thermometer, Wind, Activity, Droplets } from 'lucide-react';
-import type { VitalsData, VitalSign } from '@/types/icu';
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import type { VitalsData, VitalSign, VitalTrendPoint } from '@/types/icu';
 
 const statusColorMap = {
   normal: 'text-vital-normal',
@@ -21,6 +23,13 @@ const trendArrow = {
   stable: '→',
 };
 
+const chartConfig = {
+  heartRate: { label: 'HR', color: 'hsl(var(--chart-1))' },
+  spO2: { label: 'SpO₂', color: 'hsl(var(--chart-2))' },
+  systolicBP: { label: 'BP Sys', color: 'hsl(var(--chart-3))' },
+  diastolicBP: { label: 'BP Dia', color: 'hsl(var(--chart-4))' },
+};
+
 function VitalCard({ vital, icon: Icon, large }: { vital: VitalSign; icon: React.ElementType; large?: boolean }) {
   const color = statusColorMap[vital.status];
   const glow = statusGlowMap[vital.status];
@@ -36,9 +45,7 @@ function VitalCard({ vital, icon: Icon, large }: { vital: VitalSign; icon: React
           {vital.value !== null ? vital.value : '--'}
         </span>
         <span className="text-xs text-muted-foreground">{vital.unit}</span>
-        {vital.trend && (
-          <span className={`text-sm ml-1 ${color}`}>{trendArrow[vital.trend]}</span>
-        )}
+        {vital.trend && <span className={`text-sm ml-1 ${color}`}>{trendArrow[vital.trend]}</span>}
       </div>
       {vital.status === 'critical' && (
         <div className="mt-1 flex items-center gap-1">
@@ -52,6 +59,30 @@ function VitalCard({ vital, icon: Icon, large }: { vital: VitalSign; icon: React
           <span className="text-[10px] text-warning font-medium uppercase tracking-wider">Warning</span>
         </div>
       )}
+    </div>
+  );
+}
+
+export function VitalsTrendChart({ history }: { history: VitalTrendPoint[] }) {
+  if (history.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3">
+      <h3 className="panel-header mb-3">Trend (Recent History)</h3>
+      <ChartContainer config={chartConfig} className="h-64 w-full">
+        <LineChart accessibilityLayer data={history} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+          <CartesianGrid vertical={false} />
+          <XAxis dataKey="timestamp" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
+          <YAxis yAxisId="vitals" tickLine={false} axisLine={false} tickMargin={8} domain={[40, 180]} />
+          <YAxis yAxisId="bp" orientation="right" tickLine={false} axisLine={false} tickMargin={8} domain={[40, 180]} />
+          <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+          <Line yAxisId="vitals" dataKey="heartRate" type="monotone" stroke="var(--color-heartRate)" strokeWidth={2} dot={false} connectNulls />
+          <Line yAxisId="vitals" dataKey="spO2" type="monotone" stroke="var(--color-spO2)" strokeWidth={2} dot={false} connectNulls />
+          <Line yAxisId="bp" dataKey="systolicBP" type="monotone" stroke="var(--color-systolicBP)" strokeWidth={2} dot={false} connectNulls />
+          <Line yAxisId="bp" dataKey="diastolicBP" type="monotone" stroke="var(--color-diastolicBP)" strokeWidth={2} dot={false} connectNulls />
+          <ChartLegend content={<ChartLegendContent />} />
+        </LineChart>
+      </ChartContainer>
     </div>
   );
 }
@@ -70,14 +101,16 @@ export default function VitalsPanel({ vitals }: { vitals: VitalsData }) {
           vital={{
             label: 'Blood Pressure',
             value: vitals.systolicBP.value,
-            unit: vitals.systolicBP.value && vitals.diastolicBP.value
-              ? `${vitals.systolicBP.value}/${vitals.diastolicBP.value} mmHg`
-              : 'mmHg',
-            status: vitals.systolicBP.status === 'critical' || vitals.diastolicBP.status === 'critical'
-              ? 'critical'
-              : vitals.systolicBP.status === 'warning' || vitals.diastolicBP.status === 'warning'
-              ? 'warning'
-              : 'normal',
+            unit:
+              vitals.systolicBP.value && vitals.diastolicBP.value
+                ? `${vitals.systolicBP.value}/${vitals.diastolicBP.value} mmHg`
+                : 'mmHg',
+            status:
+              vitals.systolicBP.status === 'critical' || vitals.diastolicBP.status === 'critical'
+                ? 'critical'
+                : vitals.systolicBP.status === 'warning' || vitals.diastolicBP.status === 'warning'
+                  ? 'warning'
+                  : 'normal',
             trend: vitals.systolicBP.trend,
           }}
           icon={Activity}
