@@ -18,7 +18,7 @@ export function useCriticalAlertAudio() {
     if (typeof window === 'undefined') return null;
 
     const browserWindow = window as BrowserWindow;
-    const AudioContextConstructor = browserWindow.AudioContext || browserWindow.webkitAudioContext;
+    const AudioContextConstructor = window.AudioContext || browserWindow.webkitAudioContext;
     if (!AudioContextConstructor) return null;
 
     if (!audioContextRef.current) {
