@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Shield, Brain } from 'lucide-react';
+import { Shield, Brain, BellOff, Bell } from 'lucide-react';
 import type { VitalsData, InfusionPump, PatientStatus, SceneContext, MonitoringEvent, SystemHealth, VitalTrendPoint } from '@/types/icu';
 import { createMockVitals, createMockPumps, createMockPatientStatus, createMockSceneContext, createMockSystemHealth, createEvent } from '@/utils/mockData';
 import VitalsPanel, { VitalsTrendChart } from '@/components/icu/VitalsPanel';
@@ -16,6 +16,7 @@ const Index = () => {
   const { videoRef, status: cameraStatus, error: cameraError, start: startCamera, stop: stopCamera } = useCamera();
   const aiAnalysis = useICUAnalysis(videoRef, cameraStatus === 'active', 10000);
   const { playCriticalAlert, ensureAudioReady, audioReady } = useCriticalAlertAudio();
+  const [isMuted, setIsMuted] = useState(false);
   const lastAlertSignatureRef = useRef<string>('');
 
   const [vitals, setVitals] = useState<VitalsData>(createMockVitals());
@@ -71,10 +72,9 @@ const Index = () => {
   useEffect(() => {
     if (!criticalEventSignature) return;
     if (criticalEventSignature === lastAlertSignatureRef.current) return;
-
     lastAlertSignatureRef.current = criticalEventSignature;
-    void playCriticalAlert();
-  }, [criticalEventSignature, playCriticalAlert]);
+    if (!isMuted) void playCriticalAlert();
+  }, [criticalEventSignature, playCriticalAlert, isMuted]);
 
   // Direct vitals threshold monitoring — fires audio independently of AI event classification
   const lastVitalsAlertRef = useRef<string>('');
@@ -90,7 +90,7 @@ const Index = () => {
     if (!signature || signature === lastVitalsAlertRef.current) return;
 
     lastVitalsAlertRef.current = signature;
-    void playCriticalAlert();
+    if (!isMuted) void playCriticalAlert();
 
     // Also inject a critical event into the feed
     const messages = [
@@ -101,7 +101,7 @@ const Index = () => {
     messages.forEach(msg => {
       setEvents(prev => [createEvent('critical', 'Vitals', msg), ...prev].slice(0, 50));
     });
-  }, [vitals.heartRate.value, vitals.spO2.value, playCriticalAlert]);
+  }, [vitals.heartRate.value, vitals.spO2.value, playCriticalAlert, isMuted]);
 
   // Update system health based on camera + AI status
   useEffect(() => {
@@ -176,6 +176,24 @@ const Index = () => {
             {aiAnalysis.error && (
               <span className="text-[10px] text-destructive font-mono">{aiAnalysis.error}</span>
             )}
+            <button
+              onClick={() => setIsMuted(prev => !prev)}
+              title={isMuted ? 'Unmute alerts' : 'Mute alerts'}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-colors ${
+                isMuted
+                  ? 'border-vital-warning/50 bg-vital-warning/10 text-vital-warning'
+                  : 'border-border bg-secondary text-muted-foreground hover:bg-accent/10 hover:text-accent'
+              }`}
+            >
+              {isMuted ? (
+                <BellOff className="h-3.5 w-3.5" />
+              ) : (
+                <Bell className="h-3.5 w-3.5" />
+              )}
+              <span className="text-[10px] font-mono uppercase">
+                {isMuted ? 'Muted' : 'Sound On'}
+              </span>
+            </button>
             <div className="flex items-center gap-2">
               <div className={`h-2 w-2 rounded-full ${isAiActive ? 'bg-vital-normal' : 'bg-vital-warning'} pulse-dot`} />
               <span className={`text-xs font-mono ${isAiActive ? 'text-vital-normal' : 'text-vital-warning'}`}>
