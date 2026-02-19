@@ -76,6 +76,33 @@ const Index = () => {
     void playCriticalAlert();
   }, [criticalEventSignature, playCriticalAlert]);
 
+  // Direct vitals threshold monitoring — fires audio independently of AI event classification
+  const lastVitalsAlertRef = useRef<string>('');
+  useEffect(() => {
+    const hr = vitals.heartRate.value;
+    const spo2 = vitals.spO2.value;
+
+    const breaches: string[] = [];
+    if (spo2 !== null && spo2 < 92) breaches.push(`SpO2:${spo2}`);
+    if (hr !== null && (hr > 130 || hr < 40)) breaches.push(`HR:${hr}`);
+
+    const signature = breaches.sort().join('|');
+    if (!signature || signature === lastVitalsAlertRef.current) return;
+
+    lastVitalsAlertRef.current = signature;
+    void playCriticalAlert();
+
+    // Also inject a critical event into the feed
+    const messages = [
+      ...(spo2 !== null && spo2 < 92 ? [`SpO₂ critically low: ${spo2}% — immediate intervention required`] : []),
+      ...(hr !== null && hr > 130 ? [`Heart rate dangerously elevated: ${hr} bpm`] : []),
+      ...(hr !== null && hr < 40 ? [`Heart rate critically low: ${hr} bpm — bradycardia alert`] : []),
+    ];
+    messages.forEach(msg => {
+      setEvents(prev => [createEvent('critical', 'Vitals', msg), ...prev].slice(0, 50));
+    });
+  }, [vitals.heartRate.value, vitals.spO2.value, playCriticalAlert]);
+
   // Update system health based on camera + AI status
   useEffect(() => {
     setSystemHealth(prev => ({
